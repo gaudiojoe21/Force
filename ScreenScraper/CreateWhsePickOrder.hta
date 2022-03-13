@@ -1,0 +1,297 @@
+<!--
+ ************************************************************************************************
+ Purpose : Create a Warehouse Pick Order from Orders on an excel spreadsheet
+ Author  : Joe Gaudio
+ Date    : 12/05/2021
+
+ ************************************************************************************************
+-->
+<html>
+  <head>
+    <title>Whse Reqeust Creation - Company</title>
+    <Hta:Application
+      ApplicationName="WhseReq Creation - Company"
+      Id="WhseReqCompany"
+      icon="K:\JDA Macros\Jda.ico" 
+      VERSION="1.0"
+    />
+    
+  </head>
+
+  <script language="VBScript">
+'
+'Display excel file selection window 
+'	
+    Sub Window_OnLoad
+      window.resizeto 1000,250
+    End Sub
+
+    Sub Main()
+        
+      ExcelDoc = spreadsheet.value
+      If ExcelDoc = "" Then
+      	MsgBox ("No File was selected, cancelling process")
+        Self.Close
+        Exit Sub
+      End If	
+
+      Set auteclpsobj = CreateObject("pcomm.auteclps")
+      Set auteclconnlist = CreateObject("pcomm.auteclconnlist")
+      Set autecloia = CreateObject("pcomm.autecloia")
+      Set auteclps = CreateObject("pcomm.auteclps")
+      
+      auteclconnlist.Refresh
+          
+      For x = 1 To auteclconnlist.Count
+
+ 'Verify on proper starting screen as screen name in upper left hand corner.
+       
+       session = CheckSession(auteclconnlist, x)
+       If Mid(Session , 3 , 8) = "ScreenName" Then
+        	mbAnswer = vbYes
+        	Exit For
+       End If	
+               
+      Next    
+
+'Display error and exit if not on proper screen
+   
+      If mbAnswer <> vbYes Then
+      	MsgBox "There were no sessions found in Whse Pick Request, ending script" , vbOKOnly + vbCritical , "Ending script"
+      	Self.Close
+      	Exit Sub
+      End If
+
+      auteclpsobj.SetConnectionByName (auteclconnlist(x).Name)
+      autecloia.SetConnectionByName (auteclconnlist(x).Name)
+      auteclps.SetConnectionByName (auteclconnlist(x).Name)      
+      autecloia.WaitForInputReady
+
+	validateRow = 7
+      validateCol = 17   
+      If auteclpsobj.GetText(validateRow, validateCol, 10) <> "WarehouseOrder" Then
+        Msgbox "Session must be on the 1st screen of WarehouseOrder Pick Request, ending script"  , vbOKOnly + vbCritical , "Ending script"
+        Self.Close
+        Exit Sub      
+      End If
+
+      worksheetNumber = 1   
+    
+      Set objExcel  = createobject("Excel.application")
+      Set ExcelBook  = objExcel.Workbooks.Open(ExcelDoc)
+      Set ExcelSheet = ExcelBook.WorkSheets(worksheetNumber)
+          
+      objExcel.Visible = 1
+
+      dataRow          = Int(InputBox("Enter Data Row","dataRow","1"))    
+
+
+	Comment    = InputBox("Enter Comment")
+   
+
+'========================================================================================================
+'================================= Loop through Order spreadsheet =======================================
+'========================================================================================================
+
+     i = dataRow
+
+  Do While (ExcelSheet.Cells(i,1) <> "")
+
+      validateRow = 7
+      validateCol = 17   
+      If auteclpsobj.GetText(validateRow, validateCol, 10) <> "WarehouseOrder" Then
+        Msgbox "Session must be on the 1st screen of Whse Pick Screen, ending script"  , vbOKOnly + vbCritical , "Ending script"
+        Self.Close
+        Exit Sub      
+      End If
+
+ 	ToLocation = ExcelSheet.Cells(i,2)
+     	Whse = ExcelSheet.Cells(i,3)   
+  
+ 	screenRow = 7    
+        screenCol = 44
+       SendKeys auteclps , autecloia , "[pf5]", screenRow , screenCol
+
+	WhseReqNumber = auteclpsobj.GetText(7, 44, 7)
+	ExcelSheet.Cells(i,7) = WhseReqNumber	
+
+	screenRow = 9    
+        screenCol = 44
+     SendKeys auteclps , autecloia , "7", screenRow , screenCol
+   
+
+	screenRow = 11    
+        screenCol = 45
+    SendKeys auteclps , autecloia , whse , screenRow, screenCol
+ 
+
+	screenRow = 13    
+        screenCol = 45
+    SendKeys auteclps , autecloia , ToLocation, screenRow, screenCol
+ 
+	screenRow = 17    
+        screenCol = 27
+        SendKeys auteclps , autecloia , Comment, screenRow , screenCol
+       autecloia.WaitForInputReady 
+SendKeys auteclps , autecloia , "[Enter]" , screenRow, screenCol
+       autecloia.WaitForInputReady 
+
+
+SendKeys auteclps , autecloia , "[Enter]" , screenRow, screenCol
+       autecloia.WaitForInputReady 
+
+	SaveStore = ToLocation
+ 
+	validateRow = 5
+      	validateCol = 3 
+	If auteclpsobj.GetText(validateRow, validateCol, 17) <> "Sending Warehouse" then 
+		Msgbox "Not on SKU Detail entry screen, ending script"  , vbOKOnly + vbCritical , "Ending script"
+        Self.Close
+        Exit Sub      
+      End If
+
+'========================================================================================================
+'================================= Loop through SKU details =======================================
+'========================================================================================================
+
+	scrndtlrow = 0
+
+
+       Do While (ExcelSheet.Cells(i,2) = SaveStore)
+
+        'Check qty available and show error if not enough in warehouse, prompt for new value
+	validateRow = 21
+	validateCol = 2
+	msgbox auteclpsobj.GetText(validateRow, validateCol, 7)
+	If auteclpsobj.GetText(validateRow, validateCol, 7) ="Error" then 
+		Msgbox "Not enough inventory in Whse, please adjust qty"
+	End if
+
+	validateRow = 5
+      	validateCol = 3 
+	If auteclpsobj.GetText(validateRow, validateCol, 17) <> "Sending Warehouse" then 
+		Msgbox "Not on SKU Detail entry screen, ending script"  , vbOKOnly + vbCritical , "Ending script"
+        Self.Close
+        Exit Sub      
+      End If
+
+   	sku        = ExcelSheet.Cells(i,4)
+	Qty = ExcelSheet.Cells(i,5)
+	Qtylen = Len(Qty)
+
+	ProcessedFlag = "N"
+
+	'Validate qty cannot be greater than 1000
+	If qty < 999 then
+
+	screenRow = 8+scrndtlrow    
+        screenCol = 3
+    	SendKeys auteclps , autecloia , sku, screenRow, screenCol
+
+	screenRow = 8+scrndtlrow
+        screenCol = 60
+    	SendKeys auteclps , autecloia , qty, screenRow, screenCol
+        autecloia.WaitForInputReady 
+
+	ProcessedFlag = "Y"
+
+	End If
+
+	'msgbox i
+
+	ExcelSheet.Cells(i,6) = ProcessedFlag
+
+	i = i + 1
+	' Count rows to page to next page if already entered 12 SKUs
+	scrndtlrow = scrndtlrow + 1
+	
+	if scrndtlrow = 12 then
+
+    	SendKeys auteclps , autecloia , "[Enter]", 19, 60
+        autecloia.WaitForInputReady 
+
+	msgbox scrndtlrow
+
+	scrndtlrow = 0
+
+	End If
+
+Loop
+	'Commit Order
+	screenCol = screenCol + QtyLen
+	SendKeys auteclps , autecloia , "[fldext]" , screenRow, screenCol
+
+	SendKeys auteclps , autecloia , "[pf7]" , screenRow, screenCol
+       autecloia.WaitForInputReady 
+
+	SendKeys auteclps , autecloia , "[Enter]" , screenRow, screenCol
+       autecloia.WaitForInputReady 
+
+	'msgbox "Next PO"
+Loop
+   
+
+      ExcelBook.Close  
+
+      msgbox "Process is complete" , vbOKOnly + vbInformation , "Complete" 
+      
+      Self.Close
+    
+    
+
+    End Sub
+    
+    Function CheckSession(auteclconnlist, index)
+    
+      Set auteclpsobj = CreateObject("pcomm.auteclps")
+      Set autecloia = CreateObject("pcomm.autecloia")
+    
+      autecloia.SetConnectionByName (auteclconnlist(index).Name)
+      auteclpsobj.SetConnectionByName (auteclconnlist(index).Name)
+      autecloia.WaitForInputReady
+            
+      CheckSession = auteclpsobj.GetText(1, 1, 3564)
+      autecloia.WaitForInputReady
+    
+    End Function 
+        
+    Function ZeroPad(value , padLength)                       
+    
+      LengthLoop = padLength - Len(value)
+      zeros = ""
+      While LengthLoop > 0
+        Zeros = Zeros & "0"
+        LengthLoop = LengthLoop - 1
+      Wend  
+    
+      ZeroPad = Zeros & value
+    
+    End Function
+    
+    Sub SendKeys(auteclps , autecloia , keys , row , col)
+    
+      auteclps.SendKeys keys , row , col
+      autecloia.WaitForInputReady
+    
+    End Sub          
+        
+  </script>
+
+  <body bgcolor="#dfe8f5">
+  	  	  	
+    <center>
+    	<h1>Whse Request Entry - Company </h1>
+    	<h3><u>Select spreadsheet below</h3>
+  	  <input type="file"   name="spreadsheet"  id="file" size="100" accept="application/vnd.ms-excel">
+  	  
+  	  <br>
+  	  
+  	  <br>
+  	  
+      <input type="button" name="btnStart"     id="btnStart" value="Start Script" onclick="Main">
+      
+    </center>
+    
+  </body>
+  
+</html>
